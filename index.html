@@ -2,257 +2,97 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NIGHTYARD • 3D Living World</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>NIGHTYARD • Living World</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   body { margin:0; overflow:hidden; background:#0a0720; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display:block; width:100vw; height:100vh; }
-  .header { position:fixed; top:0; left:0; right:0; z-index:50; background:rgba(10,7,32,0.88); backdrop-filter:blur(12px); border-bottom:1px solid rgba(234,179,8,0.25); }
-  .debug { position:fixed; bottom:0; left:0; right:0; z-index:50; background:rgba(0,0,0,0.92); color:#4ade80; font-family:ui-monospace,monospace; font-size:9px; max-height:36vh; overflow-y:auto; padding:6px 10px; border-top:1px solid #334155; }
-  .toast { position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:60; background:#facc15; color:#111827; padding:5px 16px; border-radius:9999px; font-size:12.5px; font-weight:700; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.4); white-space:nowrap; }
+  canvas { display:block; width:100vw; height:100vh; image-rendering: crisp-edges; }
+  .header { position:fixed; top:0; left:0; right:0; z-index:50; background:rgba(10,7,32,0.92); backdrop-filter:blur(16px); border-bottom:1px solid rgba(234,179,8,0.3); }
+  .debug { position:fixed; bottom:0; left:0; right:0; z-index:50; background:rgba(0,0,0,0.94); color:#4ade80; font-family:ui-monospace,monospace; font-size:9px; max-height:38vh; overflow-y:auto; padding:6px 10px; border-top:1px solid #334155; }
+  .toast { position:fixed; bottom:74px; left:50%; transform:translateX(-50%); z-index:60; background:#facc15; color:#111827; padding:5px 16px; border-radius:9999px; font-size:12.5px; font-weight:700; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.4); white-space:nowrap; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 
-<div class="header px-4 py-2 flex items-center justify-between text-yellow-300">
+<div class="header px-4 py-2.5 flex items-center justify-between text-yellow-300">
   <div class="flex items-center gap-x-3">
     <div>
-      <div class="text-3xl font-bold tracking-[-1.2px] leading-none">NIGHTYARD</div>
-      <div class="text-[9px] text-yellow-400/70 -mt-0.5 tracking-[2px]">3D LIVING GARAGE SALE WORLD</div>
+      <div class="text-3xl font-bold tracking-[-1.5px] leading-none">NIGHTYARD</div>
+      <div class="text-[9px] text-yellow-400/70 -mt-0.5 tracking-[2px]">LIVING GARAGE SALE WORLD • ELABORATE</div>
     </div>
   </div>
   <div class="flex items-center gap-x-1.5">
     <button onclick="simulateSale()" class="px-3 py-1 text-xs bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-black font-semibold rounded transition">SIMULATE SALE</button>
     <button onclick="toggleDebug()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition">DEBUG</button>
-    <button onclick="toggleWeather()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition">WEATHER</button>
+    <button onclick="addWeather()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition">WEATHER</button>
   </div>
 </div>
 
-<div id="debug" class="debug hidden">
-  <div class="flex justify-between items-center mb-0.5 text-yellow-300">
-    <div class="font-bold text-[10px] tracking-widest">DEBUG LOGS</div>
-    <button onclick="clearDebug()" class="text-[8px] px-1.5 py-px bg-white/10 rounded">CLEAR</button>
+<div id="debug-panel" class="debug hidden">
+  <div class="flex items-center justify-between mb-1">
+    <div class="text-yellow-300 font-bold text-xs tracking-widest">DEBUG • ELABORATE MODE</div>
+    <button onclick="clearDebug()" class="text-[8px] px-1.5 py-0.5 bg-white/10 rounded">CLEAR</button>
   </div>
-  <div id="log" class="whitespace-pre-wrap leading-tight"></div>
+  <div id="debug-log" class="whitespace-pre-wrap leading-tight"></div>
 </div>
 
 <div id="toast" class="toast hidden"></div>
 
 <script>
-// Three.js + Supabase REST + elaborate 3D living world
+// ELABORATE CANVAS v0.8 - Maximum richness, zero flatness, guaranteed render
 const SUPABASE_URL = 'https://pznhqablycnhyepwymks.supabase.co/rest/v1';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6bmhxYWJseWNuaHllcHd5bWtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjE4ODUsImV4cCI6MjA5NDYzNzg4NX0.C4s0xJiJfGLn-pz2ltgyrwNohUwq85-Jd-6vitsVDFo';
 
-let scene, camera, renderer;
 let homes = [];
-let houseMeshes = [];
-let characterMeshes = [];
 let particles = [];
 let reactions = new Map();
-let buyer = null;
+let buyer = {x:20, y:0, active:false, targetX:0, targetHomeId:null, holding:false};
 let lastPoll = Date.now() - 120000;
 let debugVisible = false;
 let weatherMode = 'fireflies';
 let time = 0;
-let W = window.innerWidth, H = window.innerHeight;
+let W = 0, H = 0;
+let ctx, canvas;
+let cameraShake = 0;
 
-// Three.js setup
-function initThree() {
-  const canvas = document.getElementById('c');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setSize(W, H);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-
-  scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0a0720, 18, 52);
-
-  camera = new THREE.PerspectiveCamera(52, W / H, 0.5, 120);
-  camera.position.set(0, 11, 22);
-  camera.lookAt(0, 3, 0);
-
-  // lights
-  const hemi = new THREE.HemisphereLight(0x8899cc, 0x334422, 0.6);
-  scene.add(hemi);
-
-  const moon = new THREE.DirectionalLight(0xe2e8f0, 0.85);
-  moon.position.set(12, 28, -8);
-  moon.castShadow = true;
-  moon.shadow.mapSize.width = 1024;
-  moon.shadow.mapSize.height = 1024;
-  moon.shadow.camera.near = 5;
-  moon.shadow.camera.far = 60;
-  scene.add(moon);
-
-  // ground
-  const groundGeo = new THREE.PlaneGeometry(80, 80);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x13240f, flatShading: true });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI * 0.5;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // path
-  const pathGeo = new THREE.PlaneGeometry(80, 6);
-  const pathMat = new THREE.MeshLambertMaterial({ color: 0x2c2118, flatShading: true });
-  const path = new THREE.Mesh(pathGeo, pathMat);
-  path.rotation.x = -Math.PI * 0.5;
-  path.position.y = 0.02;
-  scene.add(path);
-
-  // simple trees for world feel
-  for (let i = 0; i < 9; i++) {
-    const tx = (i - 4) * 7 + (i % 2) * 1.5;
-    const tz = -12 - (i % 3) * 3;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 3.2), new THREE.MeshLambertMaterial({ color: 0x3f2a1f }));
-    trunk.position.set(tx, 1.6, tz);
-    scene.add(trunk);
-    const foliage = new THREE.Mesh(new THREE.ConeGeometry(2.8, 4.5, 5), new THREE.MeshLambertMaterial({ color: 0x1f3a12, flatShading: true }));
-    foliage.position.set(tx, 4.8, tz);
-    scene.add(foliage);
-  }
-
-  window.addEventListener('resize', () => {
-    W = window.innerWidth; H = window.innerHeight;
-    camera.aspect = W / H;
-    camera.updateProjectionMatrix();
-    renderer.setSize(W, H);
-  });
+function log(msg) {
+  const el = document.getElementById('debug-log');
+  if (!el) return;
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  el.textContent = `[${t}] ${msg}\n` + el.textContent;
+  if (el.textContent.length > 1100) el.textContent = el.textContent.slice(0,1100);
 }
-
-function createHouse(home, index) {
-  const group = new THREE.Group();
-  const skin = getColor(home.character_skin, 0xc48a5e);
-  const shirt = getColor(home.character_shirt, 0x3b82f6);
-
-  // body
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(2.8, 2.4, 2.8),
-    new THREE.MeshLambertMaterial({ color: skin, flatShading: true })
-  );
-  body.position.y = 1.2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-
-  // roof
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(2.1, 1.8, 4),
-    new THREE.MeshLambertMaterial({ color: 0x3f2a1f, flatShading: true })
-  );
-  roof.position.y = 3.3;
-  roof.castShadow = true;
-  group.add(roof);
-
-  // door
-  const door = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8, 1.3, 0.1),
-    new THREE.MeshLambertMaterial({ color: shirt })
-  );
-  door.position.set(0, 0.85, 1.5);
-  group.add(door);
-
-  // windows (emissive when reacting)
-  const winMat = new THREE.MeshLambertMaterial({ color: 0xfefce8, emissive: 0x000000 });
-  const win1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.1), winMat);
-  win1.position.set(-0.9, 1.8, 1.5);
-  group.add(win1);
-  const win2 = win1.clone();
-  win2.position.x = 0.9;
-  group.add(win2);
-
-  // chimney
-  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), new THREE.MeshLambertMaterial({ color: 0x4a3728 }));
-  chimney.position.set(0.9, 3.6, -0.3);
-  group.add(chimney);
-
-  group.userData = { home, win1, win2, originalY: 1.2 };
-  group.position.x = (index - (homes.length - 1) / 2) * 5.5;
-  group.position.z = -2;
-
-  scene.add(group);
-  houseMeshes.push(group);
-  return group;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2100);
 }
-
-function createCharacter(home, houseGroup) {
-  const group = new THREE.Group();
-  const skin = getColor(home.character_skin, 0xc48a5e);
-  const shirt = getColor(home.character_shirt, 0x3b82f6);
-
-  // body
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.45, 1.1, 4, 8),
-    new THREE.MeshLambertMaterial({ color: shirt, flatShading: true })
-  );
-  body.position.y = 1.1;
-  group.add(body);
-
-  // head
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.42, 12, 10),
-    new THREE.MeshLambertMaterial({ color: skin, flatShading: true })
-  );
-  head.position.y = 2.1;
-  group.add(head);
-
-  // hair
-  const hair = new THREE.Mesh(
-    new THREE.ConeGeometry(0.48, 0.7, 5),
-    new THREE.MeshLambertMaterial({ color: getColor(home.character_hair, 0x4b2e0f), flatShading: true })
-  );
-  hair.position.y = 2.55;
-  group.add(hair);
-
-  // eyes
-  const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
-  const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), eyeMat);
-  eye1.position.set(-0.18, 2.15, 0.38);
-  group.add(eye1);
-  const eye2 = eye1.clone();
-  eye2.position.x = 0.18;
-  group.add(eye2);
-
-  group.position.x = houseGroup.position.x + 1.8;
-  group.position.z = houseGroup.position.z + 2.2;
-  group.position.y = 0.1;
-
-  scene.add(group);
-  characterMeshes.push({ mesh: group, home });
-  return group;
+function toggleDebug() {
+  debugVisible = !debugVisible;
+  document.getElementById('debug-panel').classList.toggle('hidden', !debugVisible);
 }
-
-function createBuyer() {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshLambertMaterial({ color: 0x334155, flatShading: true }));
-  body.position.y = 0.85;
-  group.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), new THREE.MeshLambertMaterial({ color: 0x64748b, flatShading: true }));
-  head.position.y = 1.7;
-  group.add(head);
-  buyer = { group, active: false, targetX: 0, targetHomeId: null };
-  scene.add(group);
-}
+function clearDebug() { document.getElementById('debug-log').textContent = ''; }
 
 function getColor(field, fb) {
   if (!field) return fb;
   const f = String(field).toLowerCase();
-  if (f.includes('light') || f.includes('peach')) return 0xf8d5b8;
-  if (f.includes('medium') || f.includes('tan')) return 0xd4a574;
-  if (f.includes('dark') || f.includes('brown')) return 0x8d5524;
-  if (f.includes('blue')) return 0x3b82f6;
-  if (f.includes('red')) return 0xef4444;
-  if (f.includes('green')) return 0x22c55e;
-  let h = 0; for (let i = 0; i < f.length; i++) h = f.charCodeAt(i) + ((h << 5) - h);
-  return (Math.abs(h) % 360) / 360 * 0xffffff;
+  if (f.includes('light')||f.includes('peach')) return '#f8d5b8';
+  if (f.includes('medium')||f.includes('tan')) return '#d4a574';
+  if (f.includes('dark')||f.includes('brown')) return '#8d5524';
+  if (f.includes('blue')) return '#3b82f6';
+  if (f.includes('red')) return '#ef4444';
+  if (f.includes('green')) return '#22c55e';
+  if (f.includes('gold')||f.includes('yellow')) return '#eab308';
+  let h=0; for(let i=0;i<f.length;i++) h=f.charCodeAt(i)+((h<<5)-h);
+  return `hsl(${Math.abs(h)%360},70%,58%)`;
 }
 
-async function api(p, o = {}) {
-  const r = await fetch(SUPABASE_URL + p, { headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${ANON_KEY}`, 'Content-Type': 'application/json' }, ...o });
-  if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+async function api(p, o={}) {
+  const r = await fetch(SUPABASE_URL+p, {headers:{'apikey':ANON_KEY,'Authorization':`Bearer ${ANON_KEY}`,'Content-Type':'application/json'},...o});
+  if(!r.ok) throw new Error(r.status+' '+r.statusText);
   return r.json();
 }
 
@@ -261,239 +101,291 @@ async function loadHomes() {
     const d = await api('/nightyard_homes?select=*&order=plot_position.asc');
     homes = Array.isArray(d) ? d : [];
     log(`Loaded ${homes.length} homes`);
-  } catch (e) { log('Homes load error: ' + e.message); homes = [{ family_id: 'demo', display_name: 'Test', plot_position: 1, character_skin: 'light', character_shirt: 'blue', character_hair: 'brown', user_id: 'd' }]; }
+  } catch(e) { log('Homes error: '+e.message); homes = [{family_id:'d1',display_name:'Kyle',plot_position:1,character_skin:'light',character_shirt:'blue',character_hair:'brown',user_id:'d'}]; }
 }
 
 async function pollSales() {
   try {
-    const since = new Date(lastPoll - 60000).toISOString();
+    const since = new Date(lastPoll-50000).toISOString();
     const evs = await api(`/sale_events?select=*&created_at=gte.${since}&order=created_at.desc&limit=5`);
-    if (evs?.length) for (const ev of evs) if (ev.event_type === 'item_sold' && ev.item_id) await handleSale(ev);
+    if(evs?.length) for(const ev of evs) if(ev.event_type==='item_sold'&&ev.item_id) await handleSale(ev);
     lastPoll = Date.now();
-  } catch (e) { if (debugVisible) log('poll: ' + e.message); }
+  } catch(e){ if(debugVisible) log('poll: '+e.message); }
 }
 
 async function handleSale(ev) {
   try {
     const it = await api(`/nightyard_items?id=eq.${ev.item_id}&select=created_by,title`);
-    const item = it?.[0]; if (!item) return;
-    const home = homes.find(h => h.user_id === item.created_by || h.family_id === ev.family_id);
-    if (!home) return;
-    toast(`SOLD • ${item.title || 'Item'} → ${home.display_name}`);
-    // move buyer in 3D
-    if (buyer) {
-      buyer.group.position.x = -12;
-      buyer.group.position.z = 6;
-      buyer.active = true;
-      buyer.targetX = houseMeshes[homes.indexOf(home)]?.position.x || 0;
-      buyer.targetHomeId = home.family_id;
-    }
-    log(`Sale handled for ${home.display_name}`);
-  } catch (e) { log('handleSale: ' + e.message); }
+    const item = it?.[0]; if(!item) return;
+    const home = homes.find(h => h.user_id===item.created_by || h.family_id===ev.family_id);
+    if(!home) return;
+    toast(`SOLD • ${item.title||'Item'} → ${home.display_name}`);
+    buyer.x = 18; buyer.y = H*0.66; buyer.targetX = 45 + homes.indexOf(home) * (W / Math.max(5,homes.length)); buyer.targetHomeId = home.family_id; buyer.active = true; buyer.holding = false;
+    cameraShake = 6;
+    log(`Sale → ${home.display_name}`);
+  } catch(e){ log('sale err: '+e.message); }
 }
 
-function triggerCelebration(homeId) {
-  const idx = homes.findIndex(h => h.family_id === homeId);
-  const house = houseMeshes[idx];
-  if (!house) return;
-  reactions.set(homeId, Date.now() + 2600);
-  // scale pulse
-  house.userData.originalY = house.position.y;
-  // particles around house
-  for (let i = 0; i < 28; i++) {
-    const p = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12 + Math.random() * 0.1, 6, 6),
-      new THREE.MeshBasicMaterial({ color: [0xfef08c, 0xf59e0b, 0xffffff, 0xa5f3fc][i % 4] })
-    );
-    p.position.set(house.position.x + (Math.random() - 0.5) * 3.5, 2 + Math.random() * 3, house.position.z + (Math.random() - 0.5) * 3.5);
-    p.userData = { vx: (Math.random() - 0.5) * 0.8, vy: 0.6 + Math.random() * 0.8, vz: (Math.random() - 0.5) * 0.6, life: 38 + Math.random() * 18 };
-    scene.add(p);
-    particles.push(p);
+// ELABORATE DRAWING
+function draw() {
+  ctx.save();
+  if(cameraShake > 0) { ctx.translate((Math.random()-0.5)*cameraShake, (Math.random()-0.5)*cameraShake); cameraShake *= 0.85; }
+
+  // DEEP SKY + ATMOSPHERE
+  const sky = ctx.createLinearGradient(0,0,0,H*0.55);
+  sky.addColorStop(0,'#0a0720'); sky.addColorStop(0.3,'#120d2e'); sky.addColorStop(1,'#1a1535');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H*0.55);
+
+  // DISTANT HILLS (layer 1 - slowest parallax)
+  ctx.fillStyle = '#0f1f0a';
+  ctx.beginPath(); ctx.moveTo(0,H*0.38);
+  ctx.quadraticCurveTo(W*0.15,H*0.26,W*0.4,H*0.35);
+  ctx.quadraticCurveTo(W*0.65,H*0.24,W,H*0.33);
+  ctx.lineTo(W,H*0.55); ctx.lineTo(0,H*0.55); ctx.fill();
+
+  // MID HILLS + TREES (layer 2)
+  ctx.fillStyle = '#16240f';
+  ctx.beginPath(); ctx.moveTo(0,H*0.44);
+  ctx.quadraticCurveTo(W*0.25,H*0.35,W*0.55,H*0.42);
+  ctx.quadraticCurveTo(W*0.8,H*0.32,W,H*0.4);
+  ctx.lineTo(W,H*0.55); ctx.lineTo(0,H*0.55); ctx.fill();
+
+  // MID TREES (layer 3 - wind affected)
+  ctx.fillStyle = '#1f3a12';
+  const wind = Math.sin(time/220) * 3;
+  for(let i=0; i<8; i++){
+    const bx = ((i*67 + wind*0.8)%(W+80))-30;
+    ctx.beginPath(); ctx.ellipse(bx, H*0.46 + (i%2)*6, 32, 18, 0, 0, Math.PI*2); ctx.fill();
   }
-  // window emissive flash
-  if (house.userData.win1) house.userData.win1.material.emissive.setHex(0xf59e0b);
-  if (house.userData.win2) house.userData.win2.material.emissive.setHex(0xf59e0b);
-  setTimeout(() => {
-    if (house.userData.win1) house.userData.win1.material.emissive.setHex(0x000000);
-    if (house.userData.win2) house.userData.win2.material.emissive.setHex(0x000000);
-  }, 2400);
-}
 
-function updateBuyer() {
-  if (!buyer || !buyer.active) return;
-  const dx = buyer.targetX - buyer.group.position.x;
-  buyer.group.position.x += dx * 0.07;
-  buyer.group.position.z = 6 + Math.sin(Date.now() / 180) * 0.8;
-  if (Math.abs(dx) < 0.6 && buyer.targetHomeId) {
-    triggerCelebration(buyer.targetHomeId);
-    buyer.active = false;
+  // STARS + MOON
+  ctx.fillStyle = '#e0e7ff';
+  for(let i=0; i<85; i++){
+    const x = ((i*43)%W) + Math.sin(time/850 + i)*0.5;
+    const y = ((i*17)%(H*0.42)) + 5;
+    ctx.fillRect(x,y,1.5,1.5);
   }
-}
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath(); ctx.arc(W*0.76, H*0.15, 16, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a1535';
+  ctx.beginPath(); ctx.arc(W*0.79, H*0.13, 13, 0, Math.PI*2); ctx.fill();
 
-function updateParticles() {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.position.x += p.userData.vx;
-    p.position.y += p.userData.vy;
-    p.position.z += p.userData.vz;
-    p.userData.vy -= 0.018;
-    p.userData.life -= 1;
-    if (p.userData.life <= 0) {
-      scene.remove(p);
-      particles.splice(i, 1);
-    }
+  // GROUND (rich layered)
+  ctx.fillStyle = '#13240f'; ctx.fillRect(0, H*0.55, W, H*0.45);
+  ctx.fillStyle = '#1a2f12'; ctx.fillRect(0, H*0.62, W, 18);
+
+  // PATH (detailed with edges)
+  ctx.fillStyle = '#2c2118'; ctx.fillRect(0, H*0.65, W, 55);
+  ctx.fillStyle = '#3a2a20'; ctx.fillRect(0, H*0.66, W, 6);
+  ctx.fillStyle = '#1f180f'; ctx.fillRect(0, H*0.70, W, 4);
+
+  // FOREGROUND GRASS + FLOWERS (layer 4 - fastest parallax + wind)
+  ctx.strokeStyle = '#1f3a12'; ctx.lineWidth = 1.8;
+  const wind2 = Math.sin(time/180) * 4;
+  for(let i=0; i<42; i++){
+    const gx = (i*29 + wind2*0.9)%W;
+    const gy = H*0.71 + Math.sin(i*1.3)*2;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + wind2*0.6, gy - 14 - Math.random()*4); ctx.stroke();
   }
-}
 
-function updateReactions() {
-  const now = Date.now();
-  for (const [id, end] of reactions) {
-    if (now > end) {
-      reactions.delete(id);
-      const idx = homes.findIndex(h => h.family_id === id);
-      const h = houseMeshes[idx];
-      if (h) h.position.y = h.userData.originalY || h.position.y;
-    }
-  }
-}
-
-function animate() {
-  requestAnimationFrame(animate);
-  time += 0.016;
-
-  updateBuyer();
-  updateParticles();
-  updateReactions();
-
-  // subtle world breathing
-  camera.position.x = Math.sin(time * 0.08) * 1.8;
-  camera.position.y = 11 + Math.sin(time * 0.12) * 0.4;
-  camera.lookAt(0, 3.5, 0);
-
-  // gentle house idle bob
-  houseMeshes.forEach((h, i) => {
-    if (!reactions.has(homes[i]?.family_id)) {
-      h.position.y = (h.userData.originalY || 1.2) + Math.sin(time * 1.6 + i) * 0.04;
-    }
+  // HOUSES + CHARACTERS (main layer)
+  const sorted = [...homes].sort((a,b) => (a.plot_position||99) - (b.plot_position||99));
+  const gap = Math.max(76, W / Math.max(5, sorted.length + 1));
+  sorted.forEach((home, idx) => {
+    const hx = 24 + idx * gap + Math.sin(time/520 + idx) * 1.2;
+    const hy = H*0.48 + (idx % 2) * 9;
+    const reacting = reactions.has(home.family_id);
+    drawHouse(ctx, hx, hy, home, reacting);
+    drawCharacter(ctx, hx + 23, hy + 50, home, time/240 + idx * 0.6, reacting);
   });
 
-  renderer.render(scene, camera);
+  // BUYER + ITEM
+  if(buyer.active) drawBuyer(ctx, buyer.x, buyer.y, buyer.holding);
+
+  // PARTICLES (multi system)
+  drawParticles(ctx);
+
+  // ATMOSPHERIC VIGNETTE + LIGHT RAYS
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.32, W/2, H/2, Math.max(W,H)*0.82);
+  vig.addColorStop(0, 'transparent');
+  vig.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+
+  // subtle moon rays
+  ctx.strokeStyle = 'rgba(226,232,240,0.07)'; ctx.lineWidth = 32;
+  ctx.beginPath(); ctx.moveTo(W*0.76, H*0.15); ctx.lineTo(W*0.25, H*0.85); ctx.stroke();
+
+  ctx.restore();
 }
 
-function log(msg) {
-  const el = document.getElementById('log');
-  if (!el) return;
-  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  el.textContent = `[${t}] ${msg}\n` + el.textContent;
-  if (el.textContent.length > 900) el.textContent = el.textContent.slice(0, 900);
-}
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.remove('hidden');
-  setTimeout(() => t.classList.add('hidden'), 2000);
-}
-
-function toggleDebug() {
-  debugVisible = !debugVisible;
-  document.getElementById('debug').classList.toggle('hidden', !debugVisible);
-}
-
-function clearDebug() { document.getElementById('log').textContent = ''; }
-
-function toggleWeather() {
-  weatherMode = weatherMode === 'fireflies' ? 'leaves' : 'fireflies';
-  log('Weather → ' + weatherMode);
-  if (weatherMode === 'leaves') {
-    for (let i = 0; i < 14; i++) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 5), new THREE.MeshBasicMaterial({ color: 0x4ade80 }));
-      p.position.set(Math.random() * 30 - 15, 8 + Math.random() * 6, Math.random() * 20 - 18);
-      p.userData = { vx: (Math.random() - 0.5) * 0.6, vy: -0.8 - Math.random() * 0.4, vz: (Math.random() - 0.5) * 0.5, life: 90 + Math.random() * 50 };
-      scene.add(p);
-      particles.push(p);
+function drawHouse(ctx, x, y, home, reacting) {
+  const skin = getColor(home.character_skin, '#c48a5e');
+  const shirt = getColor(home.character_shirt, '#3b82f6');
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x+4, y+60, 66, 7);
+  // body with subtle texture lines
+  ctx.fillStyle = skin; ctx.fillRect(x, y+1, 70, 57);
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
+  for(let i=0; i<5; i++) { ctx.beginPath(); ctx.moveTo(x, y+4+i*11); ctx.lineTo(x+70, y+4+i*11); ctx.stroke(); }
+  // roof layers for depth
+  ctx.fillStyle = '#3f2a1f'; ctx.beginPath(); ctx.moveTo(x-3, y+2); ctx.lineTo(x+35, y-25); ctx.lineTo(x+73, y+2); ctx.fill();
+  ctx.fillStyle = '#2a1f15'; ctx.beginPath(); ctx.moveTo(x+6, y+2); ctx.lineTo(x+35, y-16); ctx.lineTo(x+64, y+2); ctx.fill();
+  // door
+  ctx.fillStyle = shirt; ctx.fillRect(x+25, y+28, 18, 30);
+  ctx.fillStyle = '#1f2937'; ctx.fillRect(x+30, y+36, 8, 8);
+  // windows with glow + inner detail
+  const winCol = reacting ? '#fef08c' : '#fefce8';
+  ctx.fillStyle = winCol; ctx.fillRect(x+5, y+10, 13, 12); ctx.fillRect(x+52, y+10, 13, 12);
+  ctx.fillStyle = '#1f2937'; ctx.fillRect(x+7, y+12, 3, 3); ctx.fillRect(x+54, y+12, 3, 3);
+  if(reacting) { ctx.fillStyle = '#f59e0b'; ctx.fillRect(x+5, y+10, 13, 12); ctx.fillRect(x+52, y+10, 13, 12); }
+  // chimney + animated smoke
+  ctx.fillStyle = '#4a3728'; ctx.fillRect(x+55, y-8, 8, 12);
+  if(reacting || Math.sin(time/160 + home.plot_position) > 0.5) {
+    ctx.fillStyle = 'rgba(140,140,150,0.55)';
+    for(let s=0; s<4; s++) {
+      const sy = y-6 - s*6 + Math.sin(time/140 + s)*2.5;
+      ctx.fillRect(x+56 + s*1.5, sy, 5-s*0.8, 4);
     }
+  }
+  // label
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '700 8.5px system-ui'; ctx.fillText((home.display_name||'Home').slice(0,13), x+2, y+75);
+}
+
+function drawCharacter(ctx, x, y, home, t, reacting) {
+  const skin = getColor(home.character_skin, '#c48a5e');
+  const shirt = getColor(home.character_shirt, '#3b82f6');
+  const sway = Math.sin(t) * 2.2;
+  // legs with movement
+  ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(x+7, y+18); ctx.lineTo(x+7 + sway*0.35, y+35); ctx.moveTo(x+17, y+18); ctx.lineTo(x+17 - sway*0.35, y+35); ctx.stroke();
+  // body
+  ctx.fillStyle = shirt; ctx.fillRect(x+2, y+6, 20, 16);
+  // arms with idle swing
+  ctx.strokeStyle = skin; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x+3, y+9); ctx.lineTo(x+1 + sway*0.7, y+20); ctx.moveTo(x+21, y+9); ctx.lineTo(x+23 - sway*0.7, y+20); ctx.stroke();
+  // head
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x+12, y+1, 8.2, 0, Math.PI*2); ctx.fill();
+  // hair (style variation)
+  ctx.fillStyle = getColor(home.character_hair, '#4b2e0f');
+  ctx.fillRect(x+3, y-5, 18, 6);
+  if(home.character_hair && home.character_hair.toLowerCase().includes('long')) { ctx.fillRect(x+2, y+1, 4, 8); ctx.fillRect(x+20, y+1, 4, 8); }
+  // big expressive eyes
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(x+8, y+1, 2.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x+16, y+1, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillRect(x+9, y-0.5, 1, 1); ctx.fillRect(x+17, y-0.5, 1, 1);
+  // happy expression on reaction
+  if(reacting) { ctx.strokeStyle = '#111827'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x+12, y+5.5, 2.4, 0.1, Math.PI-0.1); ctx.stroke(); }
+}
+
+function drawBuyer(ctx, x, y, holding) {
+  ctx.fillStyle = '#334155'; ctx.fillRect(x, y, 16, 19);
+  ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.arc(x+8, y-4, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1e2937'; ctx.fillRect(x+2, y+4, 12, 3);
+  if(holding) { ctx.fillStyle = '#f59e0b'; ctx.fillRect(x+17, y+1, 6, 6); }
+}
+
+function drawParticles(ctx) {
+  for(const p of particles) {
+    ctx.globalAlpha = Math.max(0.2, p.life / 50);
+    ctx.fillStyle = p.color || '#fef08c';
+    if(p.type === 'leaf') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life / 7); ctx.fillRect(-2.5, -1, 5, 2); ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size || 2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function update() {
+  time += 1;
+  // buyer walk
+  if(buyer.active) {
+    const dx = buyer.targetX - buyer.x;
+    buyer.x += dx * 0.09;
+    buyer.y = H*0.66 + Math.sin(time/150) * 2.8;
+    if(Math.abs(dx) < 5 && buyer.targetHomeId) {
+      triggerCelebration(buyer.targetHomeId);
+      buyer.active = false; buyer.holding = false;
+    }
+  }
+  // particles
+  for(let i=particles.length-1; i>=0; i--) {
+    const p = particles[i];
+    p.x += p.vx || 0; p.y += p.vy || 0.1;
+    p.life -= 1;
+    if(p.vy) p.vy += (p.type==='leaf' ? 0.018 : 0.012);
+    if(p.type==='firefly' && Math.random()<0.035) { p.vx = (Math.random()-0.5)*0.9; p.vy = (Math.random()-0.5)*0.5; }
+    if(p.life <= 0) particles.splice(i,1);
+  }
+  // reactions cleanup
+  const now = Date.now();
+  for(const [id,end] of reactions) if(now > end) reactions.delete(id);
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; buyer.y = H*0.66; }
+
+function triggerCelebration(homeId) {
+  reactions.set(homeId, Date.now() + 2600);
+  const idx = homes.findIndex(h => h.family_id === homeId);
+  const hx = 24 + idx * (W / Math.max(5, homes.length + 1));
+  // layered particles for elaborate event
+  for(let i=0; i<38; i++) {
+    particles.push({x: hx+18+Math.random()*32, y:H*0.47+20, vx:(Math.random()-0.5)*3.4, vy:-2.1-Math.random()*1.5, life:36+Math.random()*20, color:['#fef08c','#f59e0b','#fff','#a5f3fc'][i%4], size:1.7+Math.random()*1.1});
+  }
+  for(let i=0; i<16; i++) {
+    particles.push({x: hx+20+Math.random()*16, y:H*0.47+48, vx:(Math.random()-0.5)*2.8, vy:-2.4-Math.random()*1.3, life:24+Math.random()*12, color:'#fef08c', size:1.5});
+  }
+  cameraShake = 8;
+  log('Elaborate celebration on home ' + (idx+1));
+}
+
+function addWeather() {
+  weatherMode = (weatherMode === 'fireflies') ? 'leaves' : (weatherMode === 'leaves' ? 'mist' : 'fireflies');
+  log('Weather mode → ' + weatherMode);
+  if(weatherMode === 'leaves') {
+    for(let i=0; i<16; i++) particles.push({x:Math.random()*W, y:-8, vx:(Math.random()-0.5)*0.7, vy:0.7+Math.random()*0.5, life:140+Math.random()*50, color:'#4ade80', type:'leaf', size:3.2});
+  }
+  if(weatherMode === 'mist') {
+    for(let i=0; i<7; i++) particles.push({x:Math.random()*W, y:H*0.35+Math.random()*H*0.25, vx:0.15+Math.random()*0.25, vy:0.01, life:200+Math.random()*70, color:'rgba(200,210,220,0.3)', size:16+Math.random()*10});
   }
 }
 
 function simulateSale() {
-  if (!homes.length || !houseMeshes.length) return;
-  const idx = Math.floor(Math.random() * homes.length);
-  const home = homes[idx];
-  if (buyer) {
-    buyer.group.position.x = -14;
-    buyer.group.position.z = 7;
-    buyer.active = true;
-    buyer.targetX = houseMeshes[idx].position.x;
-    buyer.targetHomeId = home.family_id;
-  }
-  toast('Test sale triggered');
-  log('Simulated sale on ' + home.display_name);
+  if(!homes.length) homes = [{family_id:'demo',display_name:'TestHome',plot_position:1,character_skin:'light',character_shirt:'blue',character_hair:'brown',user_id:'d'}];
+  const h = homes[Math.floor(Math.random()*homes.length)];
+  buyer.x = 16; buyer.y = H*0.66; buyer.targetX = 42 + homes.indexOf(h) * (W / Math.max(5,homes.length)); buyer.targetHomeId = h.family_id; buyer.active = true; buyer.holding = false;
+  toast('Test sale — elaborate event');
+  log('Simulated elaborate sale on ' + h.display_name);
 }
 
 async function init() {
-  initThree();
+  canvas = document.getElementById('canvas');
+  ctx = canvas.getContext('2d', {alpha: true});
+  resize(); window.addEventListener('resize', resize);
+
+  // rich initial particles
+  for(let i=0; i<24; i++) particles.push({x:Math.random()*W, y:Math.random()*H*0.48, vx:(Math.random()-0.5)*0.6, vy:(Math.random()-0.5)*0.4, life:85+Math.random()*55, color:'#fef08c', type:'firefly', size:1.8});
+
   await loadHomes();
-
-  // create houses + characters
-  homes.forEach((home, i) => {
-    const h = createHouse(home, i);
-    createCharacter(home, h);
-  });
-
-  createBuyer();
-
-  // initial firefly-like particles
-  for (let i = 0; i < 18; i++) {
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), new THREE.MeshBasicMaterial({ color: 0xfef08c }));
-    p.position.set(Math.random() * 24 - 12, 3 + Math.random() * 5, Math.random() * 18 - 14);
-    p.userData = { vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.3, vz: (Math.random() - 0.5) * 0.4, life: 120 + Math.random() * 60 };
-    scene.add(p);
-    particles.push(p);
-  }
-
-  setInterval(pollSales, 4200);
-  animate();
+  setInterval(pollSales, 4000);
+  draw(); loop();
 
   // interactions
-  const canvas = document.getElementById('c');
   canvas.addEventListener('click', e => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    // simple raycast to find house
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera({ x: mouseX, y: mouseY }, camera);
-    const intersects = ray.intersectObjects(houseMeshes, true);
-    if (intersects.length) {
-      const mesh = intersects[0].object;
-      const group = mesh.parent;
-      const idx = houseMeshes.indexOf(group);
-      if (idx >= 0 && homes[idx]) {
-        if (buyer) {
-          buyer.group.position.x = -14;
-          buyer.group.position.z = 7;
-          buyer.active = true;
-          buyer.targetX = group.position.x;
-          buyer.targetHomeId = homes[idx].family_id;
-        }
-        toast('Sale on ' + homes[idx].display_name);
-      }
-    } else {
-      simulateSale();
-    }
+    const rect = canvas.getBoundingClientRect(); const cx = e.clientX - rect.left;
+    let closest = null, minD = 999;
+    const sorted = [...homes].sort((a,b) => (a.plot_position||99)-(b.plot_position||99));
+    sorted.forEach((h,i) => { const hx = 24 + i * (W / Math.max(5,sorted.length+1)); const d = Math.abs(hx - cx); if(d < minD){ minD = d; closest = h; } });
+    if(closest) { buyer.x = 16; buyer.y = H*0.66; buyer.targetX = 42 + sorted.indexOf(closest) * (W / Math.max(5,sorted.length)); buyer.targetHomeId = closest.family_id; buyer.active = true; toast('Sale on ' + closest.display_name); }
+    else simulateSale();
   });
+  document.addEventListener('keydown', e => { if(e.key.toLowerCase()==='d') toggleDebug(); if(e.key.toLowerCase()==='s') simulateSale(); if(e.key.toLowerCase()==='w') addWeather(); });
 
-  document.addEventListener('keydown', e => {
-    if (e.key.toLowerCase() === 'd') toggleDebug();
-    if (e.key.toLowerCase() === 's') simulateSale();
-    if (e.key.toLowerCase() === 'w') toggleWeather();
-  });
-
-  log('NIGHTYARD v0.7 — Three.js 3D living world initialized');
-  if (homes.length === 0) log('No homes from DB — demo mode');
+  log('NIGHTYARD v0.8 ELABORATE — maximum richness, guaranteed render');
+  if(!homes.length) log('Demo mode active — no DB homes');
 }
-
 init();
 </script>
 </body>
