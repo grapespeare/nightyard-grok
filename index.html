@@ -3,286 +3,349 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NIGHTYARD • 3D World (with 2D Fallback)</title>
+<title>NIGHTYARD • Elaborate Living World</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   body { margin:0; overflow:hidden; background:#0a0720; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display:block; width:100vw; height:100vh; }
-  .header { position:fixed; top:0; left:0; right:0; z-index:50; background:rgba(10,7,32,0.9); backdrop-filter:blur(12px); border-bottom:1px solid rgba(234,179,8,0.3); }
-  .debug { position:fixed; bottom:0; left:0; right:0; z-index:50; background:rgba(0,0,0,0.94); color:#4ade80; font-family:ui-monospace,monospace; font-size:9px; max-height:36vh; overflow-y:auto; padding:6px 10px; border-top:1px solid #334155; }
-  .toast { position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:60; background:#facc15; color:#111827; padding:5px 16px; border-radius:9999px; font-size:12.5px; font-weight:700; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.4); white-space:nowrap; }
-  .fallback-notice { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:55; background:rgba(239,68,68,0.9); color:white; padding:4px 12px; border-radius:6px; font-size:11px; font-weight:600; }
+  canvas { display:block; width:100vw; height:100vh; image-rendering: crisp-edges; }
+  .header { position:fixed; top:0; left:0; right:0; z-index:50; background:rgba(10,7,32,0.92); backdrop-filter:blur(16px); border-bottom:1px solid rgba(234,179,8,0.3); }
+  .debug { position:fixed; bottom:0; left:0; right:0; z-index:50; background:rgba(0,0,0,0.94); color:#4ade80; font-family:ui-monospace,monospace; font-size:9px; max-height:38vh; overflow-y:auto; padding:6px 10px; border-top:1px solid #334155; }
+  .toast { position:fixed; bottom:74px; left:50%; transform:translateX(-50%); z-index:60; background:#facc15; color:#111827; padding:5px 16px; border-radius:9999px; font-size:12.5px; font-weight:700; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.4); white-space:nowrap; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="canvas"></canvas>
 
-<div class="header px-4 py-2 flex items-center justify-between text-yellow-300">
+<div class="header px-4 py-2.5 flex items-center justify-between text-yellow-300">
   <div class="flex items-center gap-x-3">
     <div>
-      <div class="text-3xl font-bold tracking-[-1.2px] leading-none">NIGHTYARD</div>
-      <div class="text-[9px] text-yellow-400/70 -mt-0.5 tracking-[2px]">3D LIVING WORLD + 2D FALLBACK</div>
+      <div class="text-3xl font-bold tracking-[-1.5px] leading-none">NIGHTYARD</div>
+      <div class="text-[9px] text-yellow-400/70 -mt-0.5 tracking-[2px]">ELABORATE LIVING WORLD • MAX RICHNESS</div>
     </div>
   </div>
   <div class="flex items-center gap-x-1.5">
-    <button onclick="simulateSale()" class="px-3 py-1 text-xs bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-black font-semibold rounded">SIMULATE SALE</button>
-    <button onclick="toggleDebug()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded">DEBUG</button>
-    <button onclick="toggleWeather()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded">WEATHER</button>
+    <button onclick="simulateSale()" class="px-3 py-1 text-xs bg-yellow-400 hover:bg-yellow-300 active:bg-yellow-500 text-black font-semibold rounded transition">SIMULATE SALE</button>
+    <button onclick="toggleDebug()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition">DEBUG</button>
+    <button onclick="addWeather()" class="px-2.5 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition">WEATHER</button>
   </div>
 </div>
 
-<div id="debug" class="debug hidden">
-  <div class="flex justify-between items-center mb-0.5 text-yellow-300">
-    <div class="font-bold text-[10px] tracking-widest">DEBUG LOGS</div>
-    <button onclick="clearDebug()" class="text-[8px] px-1.5 py-px bg-white/10 rounded">CLEAR</button>
+<div id="debug-panel" class="debug hidden">
+  <div class="flex items-center justify-between mb-1">
+    <div class="text-yellow-300 font-bold text-xs tracking-widest">DEBUG LOGS</div>
+    <button onclick="clearDebug()" class="text-[8px] px-1.5 py-0.5 bg-white/10 rounded">CLEAR</button>
   </div>
-  <div id="log" class="whitespace-pre-wrap leading-tight"></div>
+  <div id="debug-log" class="whitespace-pre-wrap leading-tight"></div>
 </div>
 
 <div id="toast" class="toast hidden"></div>
-<div id="fallback-notice" class="fallback-notice hidden">3D FAILED — Using rich 2D fallback</div>
 
 <script>
-// Three.js 3D + automatic rich Canvas fallback
+// COMPLETE ELABORATE CANVAS v0.9.1 - Guaranteed render, maximum richness
 const SUPABASE_URL = 'https://pznhqablycnhyepwymks.supabase.co/rest/v1';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6bmhxYWJseWNuaHllcHd5bWtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjE4ODUsImV4cCI6MjA5NDYzNzg4NX0.C4s0xJiJfGLn-pz2ltgyrwNohUwq85-Jd-6vitsVDFo';
 
-let use3D = true;
-let scene, camera, renderer;
 let homes = [];
-let houseMeshes = [];
-let characterMeshes = [];
 let particles = [];
 let reactions = new Map();
-let buyer = null;
+let buyer = {x:18, y:0, active:false, targetX:0, targetHomeId:null, holding:false};
 let lastPoll = Date.now() - 120000;
 let debugVisible = false;
 let weatherMode = 'fireflies';
 let time = 0;
-let W = window.innerWidth, H = window.innerHeight;
-let ctx2d, canvas2d; // fallback
+let W = 0, H = 0;
+let ctx, canvas;
+let cameraShake = 0;
 
-// === 3D MODE ===
-function tryInit3D() {
+function log(msg) {
+  const el = document.getElementById('debug-log');
+  if (!el) return;
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  el.textContent = `[${t}] ${msg}\n` + el.textContent;
+  if (el.textContent.length > 1100) el.textContent = el.textContent.slice(0,1100);
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2100);
+}
+function toggleDebug() {
+  debugVisible = !debugVisible;
+  document.getElementById('debug-panel').classList.toggle('hidden', !debugVisible);
+}
+function clearDebug() { document.getElementById('debug-log').textContent = ''; }
+
+function getColor(field, fb) {
+  if (!field) return fb;
+  const f = String(field).toLowerCase();
+  if (f.includes('light')||f.includes('peach')) return '#f8d5b8';
+  if (f.includes('medium')||f.includes('tan')) return '#d4a574';
+  if (f.includes('dark')||f.includes('brown')) return '#8d5524';
+  if (f.includes('blue')) return '#3b82f6';
+  if (f.includes('red')) return '#ef4444';
+  if (f.includes('green')) return '#22c55e';
+  if (f.includes('gold')) return '#eab308';
+  let h=0; for(let i=0;i<f.length;i++) h = f.charCodeAt(i)+((h<<5)-h);
+  return `hsl(${Math.abs(h)%360},70%,58%)`;
+}
+
+async function api(p, o={}) {
+  const r = await fetch(SUPABASE_URL+p, {headers:{'apikey':ANON_KEY,'Authorization':`Bearer ${ANON_KEY}`,'Content-Type':'application/json'},...o});
+  if(!r.ok) throw new Error(r.status+' '+r.statusText);
+  return r.json();
+}
+
+async function loadHomes() {
   try {
-    const canvas = document.getElementById('c');
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-
-    scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x0a0720, 16, 48);
-
-    camera = new THREE.PerspectiveCamera(50, W/H, 0.5, 100);
-    camera.position.set(0, 10, 20);
-    camera.lookAt(0, 3, 0);
-
-    const hemi = new THREE.HemisphereLight(0x8899cc, 0x334422, 0.55);
-    scene.add(hemi);
-
-    const moon = new THREE.DirectionalLight(0xe2e8f0, 0.9);
-    moon.position.set(10, 26, -6);
-    moon.castShadow = true;
-    scene.add(moon);
-
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshLambertMaterial({ color: 0x13240f, flatShading: true }));
-    ground.rotation.x = -Math.PI * 0.5;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(70, 5), new THREE.MeshLambertMaterial({ color: 0x2c2118, flatShading: true }));
-    path.rotation.x = -Math.PI * 0.5;
-    path.position.y = 0.01;
-    scene.add(path);
-
-    for (let i = 0; i < 8; i++) {
-      const tx = (i-3.5)*6.5;
-      const tz = -10 - (i%3)*2.5;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 2.8), new THREE.MeshLambertMaterial({ color: 0x3f2a1f }));
-      trunk.position.set(tx, 1.4, tz);
-      scene.add(trunk);
-      const foliage = new THREE.Mesh(new THREE.ConeGeometry(2.4, 3.8, 5), new THREE.MeshLambertMaterial({ color: 0x1f3a12, flatShading: true }));
-      foliage.position.set(tx, 4.2, tz);
-      scene.add(foliage);
-    }
-
-    window.addEventListener('resize', () => {
-      W = window.innerWidth; H = window.innerHeight;
-      camera.aspect = W/H; camera.updateProjectionMatrix();
-      renderer.setSize(W, H);
-    });
-
-    return true;
-  } catch (e) {
-    log('3D init failed: ' + e.message);
-    return false;
-  }
+    const d = await api('/nightyard_homes?select=*&order=plot_position.asc');
+    homes = Array.isArray(d) ? d : [];
+    log(`Loaded ${homes.length} homes`);
+  } catch(e) { log('Homes error: '+e.message); homes = [{family_id:'d1',display_name:'Kyle',plot_position:1,character_skin:'light',character_shirt:'blue',character_hair:'brown',user_id:'d'}]; }
 }
 
-function createHouse3D(home, index) {
-  const group = new THREE.Group();
-  const skin = getColor(home.character_skin, 0xc48a5e);
-  const shirt = getColor(home.character_shirt, 0x3b82f6);
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.2, 2.6), new THREE.MeshLambertMaterial({ color: skin, flatShading: true }));
-  body.position.y = 1.1;
-  body.castShadow = true;
-  group.add(body);
-
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.6, 4), new THREE.MeshLambertMaterial({ color: 0x3f2a1f, flatShading: true }));
-  roof.position.y = 3.0;
-  roof.castShadow = true;
-  group.add(roof);
-
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.1), new THREE.MeshLambertMaterial({ color: shirt }));
-  door.position.set(0, 0.8, 1.4);
-  group.add(door);
-
-  const winMat = new THREE.MeshLambertMaterial({ color: 0xfefce8, emissive: 0x000000 });
-  const w1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.1), winMat);
-  w1.position.set(-0.85, 1.7, 1.4);
-  group.add(w1);
-  const w2 = w1.clone(); w2.position.x = 0.85; group.add(w2);
-
-  group.userData = { home, w1, w2 };
-  group.position.x = (index - (homes.length-1)/2) * 5.2;
-  group.position.z = -1.5;
-
-  scene.add(group);
-  houseMeshes.push(group);
+async function pollSales() {
+  try {
+    const since = new Date(lastPoll-50000).toISOString();
+    const evs = await api(`/sale_events?select=*&created_at=gte.${since}&order=created_at.desc&limit=5`);
+    if(evs?.length) for(const ev of evs) if(ev.event_type==='item_sold'&&ev.item_id) await handleSale(ev);
+    lastPoll = Date.now();
+  } catch(e){ if(debugVisible) log('poll: '+e.message); }
 }
 
-function createCharacter3D(home, house) {
-  const g = new THREE.Group();
-  const skin = getColor(home.character_skin, 0xc48a5e);
-  const shirt = getColor(home.character_shirt, 0x3b82f6);
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1.0, 4, 8), new THREE.MeshLambertMaterial({ color: shirt, flatShading: true }));
-  body.position.y = 1.0;
-  g.add(body);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 8), new THREE.MeshLambertMaterial({ color: skin, flatShading: true }));
-  head.position.y = 1.95;
-  g.add(head);
-
-  const hair = new THREE.Mesh(new THREE.ConeGeometry(0.44, 0.6, 5), new THREE.MeshLambertMaterial({ color: getColor(home.character_hair, 0x4b2e0f), flatShading: true }));
-  hair.position.y = 2.4;
-  g.add(hair);
-
-  const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
-  const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), eyeMat);
-  e1.position.set(-0.16, 2.0, 0.35);
-  g.add(e1);
-  const e2 = e1.clone(); e2.position.x = 0.16; g.add(e2);
-
-  g.position.x = house.position.x + 1.6;
-  g.position.z = house.position.z + 2.0;
-  g.position.y = 0.1;
-
-  scene.add(g);
-  characterMeshes.push({ mesh: g, home });
+async function handleSale(ev) {
+  try {
+    const it = await api(`/nightyard_items?id=eq.${ev.item_id}&select=created_by,title`);
+    const item = it?.[0]; if(!item) return;
+    const home = homes.find(h => h.user_id===item.created_by || h.family_id===ev.family_id);
+    if(!home) return;
+    toast(`SOLD • ${item.title||'Item'} → ${home.display_name}`);
+    buyer.x = 16; buyer.y = H*0.66; buyer.targetX = 42 + homes.indexOf(home) * (W / Math.max(5,homes.length)); buyer.targetHomeId = home.family_id; buyer.active = true; buyer.holding = false;
+    cameraShake = 7;
+    log(`Sale → ${home.display_name}`);
+  } catch(e){ log('sale err: '+e.message); }
 }
 
-function createBuyer3D() {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.85, 4, 8), new THREE.MeshLambertMaterial({ color: 0x334155, flatShading: true }));
-  body.position.y = 0.8;
-  g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 7), new THREE.MeshLambertMaterial({ color: 0x64748b, flatShading: true }));
-  head.position.y = 1.6;
-  g.add(head);
-  buyer = { group: g, active: false, targetX: 0, targetHomeId: null };
-  scene.add(g);
-}
+function draw() {
+  ctx.save();
+  if(cameraShake > 0){ ctx.translate((Math.random()-0.5)*cameraShake, (Math.random()-0.5)*cameraShake); cameraShake *= 0.82; }
 
-// === 2D FALLBACK (rich elaborate Canvas) ===
-function init2DFallback() {
-  use3D = false;
-  document.getElementById('fallback-notice').classList.remove('hidden');
-  const c = document.getElementById('c');
-  ctx2d = c.getContext('2d', { alpha: true });
-  // ... (same rich elaborate Canvas code as v0.8, abbreviated here for length but fully functional)
-  // For brevity in this response, the fallback is the full v0.8 elaborate Canvas logic
-  log('FALLBACK: Using rich 2D elaborate mode');
-  // (In real push this contains the full elaborate Canvas from v0.8)
-}
+  // DEEP SKY + ATMOSPHERE
+  const sky = ctx.createLinearGradient(0,0,0,H*0.55);
+  sky.addColorStop(0,'#0a0720'); sky.addColorStop(0.32,'#120d2e'); sky.addColorStop(1,'#1a1535');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H*0.55);
 
-// Simplified main loop for this response - in real it would have full logic
-function animate() {
-  requestAnimationFrame(animate);
-  time += 0.016;
-  if (use3D && renderer && scene && camera) {
-    // 3D update + render (simplified for this push)
-    camera.position.x = Math.sin(time * 0.07) * 1.6;
-    camera.position.y = 10 + Math.sin(time * 0.1) * 0.3;
-    camera.lookAt(0, 3.2, 0);
-    renderer.render(scene, camera);
-  } else if (ctx2d) {
-    // 2D fallback draw (would call the full elaborate draw function)
-    ctx2d.fillStyle = '#0a0720';
-    ctx2d.fillRect(0,0,W,H);
-    ctx2d.fillStyle = '#fef08c';
-    ctx2d.font = 'bold 24px system-ui';
-    ctx2d.fillText('ELABORATE 2D FALLBACK ACTIVE', 40, H/2);
-    ctx2d.fillText('3D WebGL failed on this device', 40, H/2 + 30);
-  }
-}
+  // DISTANT HILLS
+  ctx.fillStyle = '#0f1f0a';
+  ctx.beginPath(); ctx.moveTo(0,H*0.38);
+  ctx.quadraticCurveTo(W*0.18,H*0.26,W*0.42,H*0.35);
+  ctx.quadraticCurveTo(W*0.68,H*0.24,W,H*0.33);
+  ctx.lineTo(W,H*0.55); ctx.lineTo(0,H*0.55); ctx.fill();
 
-function log(msg) { /* same as before */ }
-function toast(msg) { /* same as before */ }
-function toggleDebug() { /* same */ }
-function clearDebug() { /* same */ }
-function toggleWeather() { /* same */ }
-function simulateSale() { /* same */ }
+  // MID HILLS + TREES
+  ctx.fillStyle = '#16240f';
+  ctx.beginPath(); ctx.moveTo(0,H*0.44);
+  ctx.quadraticCurveTo(W*0.25,H*0.34,W*0.55,H*0.42);
+  ctx.quadraticCurveTo(W*0.82,H*0.31,W,H*0.39);
+  ctx.lineTo(W,H*0.55); ctx.lineTo(0,H*0.55); ctx.fill();
 
-function getColor(f, fb) { /* same as previous */ return fb; }
-
-async function init() {
-  const canvas = document.getElementById('c');
-  W = window.innerWidth; H = window.innerHeight;
-
-  const threeOK = tryInit3D();
-  if (!threeOK) {
-    init2DFallback();
-  } else {
-    // create 3D content
-    await loadHomes();
-    homes.forEach((h,i) => {
-      const house = createHouse3D(h, i);
-      createCharacter3D(h, house);
-    });
-    createBuyer3D();
-    // initial particles
-    for (let i=0; i<14; i++) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.08,5,5), new THREE.MeshBasicMaterial({color:0xfef08c}));
-      p.position.set(Math.random()*22-11, 2.5+Math.random()*4, Math.random()*16-12);
-      p.userData = {vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.3, vz:(Math.random()-0.5)*0.4, life:100+Math.random()*50};
-      scene.add(p); particles.push(p);
-    }
-    setInterval(pollSales, 4200);
-    animate();
-    log('3D mode active');
+  // MID TREES (wind)
+  ctx.fillStyle = '#1f3a12';
+  const wind = Math.sin(time/210) * 3.5;
+  for(let i=0;i<9;i++){
+    const bx = ((i*61 + wind*0.7)%(W+90))-35;
+    ctx.beginPath(); ctx.ellipse(bx, H*0.46 + (i%2)*7, 34, 19, 0, 0, Math.PI*2); ctx.fill();
   }
 
-  // interactions (simplified)
-  canvas.addEventListener('click', () => simulateSale());
-  document.addEventListener('keydown', e => { if(e.key.toLowerCase()==='d') toggleDebug(); if(e.key.toLowerCase()==='s') simulateSale(); });
+  // STARS + MOON
+  ctx.fillStyle = '#e0e7ff';
+  for(let i=0;i<80;i++){
+    const x = ((i*41)%W) + Math.sin(time/820 + i)*0.4;
+    const y = ((i*16)%(H*0.42)) + 5;
+    ctx.fillRect(x,y,1.4,1.4);
+  }
+  ctx.fillStyle = '#e2e8f0';
+  ctx.beginPath(); ctx.arc(W*0.77, H*0.14, 15, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a1535';
+  ctx.beginPath(); ctx.arc(W*0.80, H*0.12, 12, 0, Math.PI*2); ctx.fill();
 
-  log('NIGHTYARD v0.9 — 3D with automatic 2D fallback');
+  // GROUND
+  ctx.fillStyle = '#13240f'; ctx.fillRect(0, H*0.55, W, H*0.45);
+  ctx.fillStyle = '#1a2f12'; ctx.fillRect(0, H*0.61, W, 16);
+
+  // PATH
+  ctx.fillStyle = '#2c2118'; ctx.fillRect(0, H*0.65, W, 54);
+  ctx.fillStyle = '#3a2a20'; ctx.fillRect(0, H*0.66, W, 5);
+
+  // FOREGROUND GRASS + FLOWERS (fast wind)
+  ctx.strokeStyle = '#1f3a12'; ctx.lineWidth = 1.7;
+  const wind2 = Math.sin(time/170) * 4.5;
+  for(let i=0; i<44; i++){
+    const gx = (i*28 + wind2*0.85)%W;
+    const gy = H*0.71 + Math.sin(i*1.2)*2;
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + wind2*0.55, gy - 13 - Math.random()*3.5); ctx.stroke();
+  }
+
+  // HOUSES
+  const sorted = [...homes].sort((a,b) => (a.plot_position||99) - (b.plot_position||99));
+  const gap = Math.max(74, W / Math.max(5, sorted.length + 1));
+  sorted.forEach((home, idx) => {
+    const hx = 22 + idx * gap + Math.sin(time/480 + idx) * 1.1;
+    const hy = H*0.47 + (idx % 2) * 8;
+    const reacting = reactions.has(home.family_id);
+    drawHouse(ctx, hx, hy, home, reacting);
+    drawCharacter(ctx, hx + 22, hy + 49, home, time/230 + idx * 0.55, reacting);
+  });
+
+  // BUYER
+  if(buyer.active) drawBuyer(ctx, buyer.x, buyer.y, buyer.holding);
+
+  // PARTICLES
+  drawParticles(ctx);
+
+  // VIGNETTE + ATMOSPHERE
+  const vig = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.8);
+  vig.addColorStop(0, 'transparent');
+  vig.addColorStop(1, 'rgba(0,0,0,0.48)');
+  ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+
+  ctx.restore();
 }
 
-async function loadHomes() { /* same as before, simplified */ homes = [{family_id:'d1',display_name:'Test',plot_position:1,character_skin:'light',character_shirt:'blue',character_hair:'brown',user_id:'d'}]; }
-async function pollSales() { /* same */ }
-async function handleSale(ev) { /* same */ }
+function drawHouse(ctx, x, y, home, reacting) {
+  const skin = getColor(home.character_skin, '#c48a5e');
+  const shirt = getColor(home.character_shirt, '#3b82f6');
+  ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.fillRect(x+4, y+59, 66, 6);
+  ctx.fillStyle = skin; ctx.fillRect(x, y+1, 70, 56);
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 0.8;
+  for(let i=0; i<4; i++){ ctx.beginPath(); ctx.moveTo(x, y+3+i*12); ctx.lineTo(x+70, y+3+i*12); ctx.stroke(); }
+  ctx.fillStyle = '#3f2a1f'; ctx.beginPath(); ctx.moveTo(x-2, y+2); ctx.lineTo(x+35, y-24); ctx.lineTo(x+72, y+2); ctx.fill();
+  ctx.fillStyle = '#2a1f15'; ctx.beginPath(); ctx.moveTo(x+7, y+2); ctx.lineTo(x+35, y-15); ctx.lineTo(x+63, y+2); ctx.fill();
+  ctx.fillStyle = shirt; ctx.fillRect(x+25, y+27, 18, 30);
+  ctx.fillStyle = '#1f2937'; ctx.fillRect(x+30, y+35, 8, 8);
+  const win = reacting ? '#fef08c' : '#fefce8';
+  ctx.fillStyle = win; ctx.fillRect(x+5, y+9, 12, 11); ctx.fillRect(x+53, y+9, 12, 11);
+  if(reacting){ ctx.fillStyle = '#f59e0b'; ctx.fillRect(x+5, y+9, 12, 11); ctx.fillRect(x+53, y+9, 12, 11); }
+  ctx.fillStyle = '#4a3728'; ctx.fillRect(x+56, y-7, 7, 11);
+  if(reacting || Math.sin(time/150 + home.plot_position) > 0.55){
+    ctx.fillStyle = 'rgba(130,130,140,0.5)';
+    for(let s=0; s<4; s++){ const sy = y-5 - s*5.5 + Math.sin(time/130 + s)*2.2; ctx.fillRect(x+57 + s*1.3, sy, 4.5-s*0.7, 3.5); }
+  }
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '700 8px system-ui'; ctx.fillText((home.display_name||'Home').slice(0,12), x+2, y+74);
+}
 
-function updateBuyer() { /* same */ }
+function drawCharacter(ctx, x, y, home, t, reacting) {
+  const skin = getColor(home.character_skin, '#c48a5e');
+  const shirt = getColor(home.character_shirt, '#3b82f6');
+  const sway = Math.sin(t) * 2.1;
+  ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x+7, y+17); ctx.lineTo(x+7 + sway*0.32, y+34); ctx.moveTo(x+17, y+17); ctx.lineTo(x+17 - sway*0.32, y+34); ctx.stroke();
+  ctx.fillStyle = shirt; ctx.fillRect(x+2, y+5, 20, 15);
+  ctx.strokeStyle = skin; ctx.lineWidth = 1.9;
+  ctx.beginPath(); ctx.moveTo(x+3, y+8); ctx.lineTo(x+1 + sway*0.65, y+19); ctx.moveTo(x+21, y+8); ctx.lineTo(x+23 - sway*0.65, y+19); ctx.stroke();
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x+12, y, 8, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = getColor(home.character_hair, '#4b2e0f');
+  ctx.fillRect(x+3, y-5, 18, 5.5);
+  if(home.character_hair && home.character_hair.toLowerCase().includes('long')){ ctx.fillRect(x+2, y+0.5, 3.5, 7.5); ctx.fillRect(x+20.5, y+0.5, 3.5, 7.5); }
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(x+8, y, 2.4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x+16, y, 2.4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.fillRect(x+9, y-1, 1, 1); ctx.fillRect(x+17, y-1, 1, 1);
+  if(reacting){ ctx.strokeStyle = '#111827'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x+12, y+5, 2.3, 0.05, Math.PI-0.05); ctx.stroke(); }
+}
 
-function updateParticles() { /* same */ }
+function drawBuyer(ctx, x, y, holding) {
+  ctx.fillStyle = '#334155'; ctx.fillRect(x, y, 15, 18);
+  ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.arc(x+7.5, y-4, 5.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1e2937'; ctx.fillRect(x+2, y+3, 11, 2.5);
+  if(holding){ ctx.fillStyle = '#f59e0b'; ctx.fillRect(x+16, y, 5.5, 5.5); }
+}
 
-function triggerCelebration(id) { /* same */ }
+function drawParticles(ctx) {
+  for(const p of particles){
+    ctx.globalAlpha = Math.max(0.18, p.life / 48);
+    ctx.fillStyle = p.color || '#fef08c';
+    if(p.type === 'leaf'){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.life/6.5); ctx.fillRect(-2.2,-0.9,4.4,1.8); ctx.restore(); }
+    else { ctx.beginPath(); ctx.arc(p.x, p.y, p.size || 1.9, 0, Math.PI*2); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+}
 
+function update() {
+  time += 1;
+  if(buyer.active){
+    const dx = buyer.targetX - buyer.x;
+    buyer.x += dx * 0.085;
+    buyer.y = H*0.66 + Math.sin(time/140) * 2.6;
+    if(Math.abs(dx) < 4.5 && buyer.targetHomeId){ triggerCelebration(buyer.targetHomeId); buyer.active = false; buyer.holding = false; }
+  }
+  for(let i=particles.length-1; i>=0; i--){
+    const p = particles[i];
+    p.x += p.vx || 0; p.y += p.vy || 0.09;
+    p.life -= 1;
+    if(p.vy) p.vy += (p.type==='leaf' ? 0.016 : 0.01);
+    if(p.type==='firefly' && Math.random()<0.03){ p.vx = (Math.random()-0.5)*0.85; p.vy = (Math.random()-0.5)*0.45; }
+    if(p.life <= 0) particles.splice(i,1);
+  }
+  const now = Date.now();
+  for(const [id,end] of reactions) if(now > end) reactions.delete(id);
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; buyer.y = H*0.66; }
+
+function triggerCelebration(homeId){
+  reactions.set(homeId, Date.now() + 2500);
+  const idx = homes.findIndex(h => h.family_id === homeId);
+  const hx = 22 + idx * (W / Math.max(5, homes.length + 1));
+  for(let i=0; i<36; i++){
+    particles.push({x: hx+16+Math.random()*30, y:H*0.46+18, vx:(Math.random()-0.5)*3.3, vy:-2.0-Math.random()*1.4, life:34+Math.random()*18, color:['#fef08c','#f59e0b','#fff','#a5f3fc'][i%4], size:1.6+Math.random()*1});
+  }
+  for(let i=0; i<14; i++){
+    particles.push({x: hx+18+Math.random()*14, y:H*0.46+46, vx:(Math.random()-0.5)*2.6, vy:-2.3-Math.random()*1.2, life:22+Math.random()*10, color:'#fef08c', size:1.4});
+  }
+  cameraShake = 7;
+  log('Celebration on home '+(idx+1));
+}
+
+function addWeather(){
+  weatherMode = (weatherMode==='fireflies')?'leaves':(weatherMode==='leaves'?'mist':'fireflies');
+  log('Weather → '+weatherMode);
+  if(weatherMode==='leaves') for(let i=0;i<15;i++) particles.push({x:Math.random()*W, y:-6, vx:(Math.random()-0.5)*0.65, vy:0.65+Math.random()*0.45, life:130+Math.random()*45, color:'#4ade80', type:'leaf', size:3});
+  if(weatherMode==='mist') for(let i=0;i<6;i++) particles.push({x:Math.random()*W, y:H*0.32+Math.random()*H*0.22, vx:0.12+Math.random()*0.22, vy:0.008, life:180+Math.random()*60, color:'rgba(200,210,220,0.28)', size:15+Math.random()*9});
+}
+
+function simulateSale(){
+  if(!homes.length) homes=[{family_id:'demo',display_name:'TestHome',plot_position:1,character_skin:'light',character_shirt:'blue',character_hair:'brown',user_id:'d'}];
+  const h = homes[Math.floor(Math.random()*homes.length)];
+  buyer.x = 14; buyer.y = H*0.66; buyer.targetX = 40 + homes.indexOf(h) * (W / Math.max(5,homes.length)); buyer.targetHomeId = h.family_id; buyer.active = true; buyer.holding = false;
+  toast('Test sale - elaborate event');
+  log('Simulated on ' + h.display_name);
+}
+
+async function init(){
+  canvas = document.getElementById('canvas');
+  ctx = canvas.getContext('2d', {alpha: true});
+  resize(); window.addEventListener('resize', resize);
+
+  for(let i=0; i<22; i++) particles.push({x:Math.random()*W, y:Math.random()*H*0.46, vx:(Math.random()-0.5)*0.55, vy:(Math.random()-0.5)*0.35, life:80+Math.random()*50, color:'#fef08c', type:'firefly', size:1.7});
+
+  await loadHomes();
+  setInterval(pollSales, 3900);
+  draw(); loop();
+
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect(); const cx = e.clientX - rect.left;
+    let closest = null, minD = 999;
+    const sorted = [...homes].sort((a,b) => (a.plot_position||99)-(b.plot_position||99));
+    sorted.forEach((h,i) => { const hx = 22 + i * (W / Math.max(5,sorted.length+1)); const d = Math.abs(hx - cx); if(d < minD){ minD = d; closest = h; } });
+    if(closest){ buyer.x = 14; buyer.y = H*0.66; buyer.targetX = 40 + sorted.indexOf(closest) * (W / Math.max(5,sorted.length)); buyer.targetHomeId = closest.family_id; buyer.active = true; toast('Sale on ' + closest.display_name); }
+    else simulateSale();
+  });
+  document.addEventListener('keydown', e => { if(e.key.toLowerCase()==='d') toggleDebug(); if(e.key.toLowerCase()==='s') simulateSale(); if(e.key.toLowerCase()==='w') addWeather(); });
+
+  log('NIGHTYARD v0.9.1 ELABORATE - full richness, guaranteed render');
+  if(!homes.length) log('Demo mode - no DB homes');
+}
 init();
 </script>
 </body>
