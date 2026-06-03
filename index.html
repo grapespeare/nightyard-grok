@@ -1,0 +1,166 @@
+<!-- Updated v0.2 - More beautiful diorama elements, better characters, mobile optimized -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nightyard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@500;600&display=swap');
+        :root { --tw-color-primary: #facc15; }
+        body { font-family: 'Inter', system-ui; }
+        .title { font-family: 'Space Grotesk', sans-serif; }
+        @keyframes celebrate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .celebrating { animation: celebrate 0.8s ease-in-out 2; }
+    </style>
+</head>
+<body class="bg-[#0f0a2e] text-slate-200 min-h-screen flex flex-col">
+    <div class="flex-1 p-4 md:p-8 relative overflow-hidden">
+        <!-- Background stars -->
+        <div id="stars" class="absolute inset-0 pointer-events-none"></div>
+        <header class="flex justify-between items-center mb-8 z-10 relative">
+            <div class="flex items-center gap-x-4">
+                <div class="text-6xl">🌙</div>
+                <div>
+                    <h1 class="title text-5xl md:text-6xl font-semibold tracking-[-2px] text-yellow-300">NIGHTYARD</h1>
+                    <p class="text-yellow-300/70 text-sm -mt-1">living garage sale diorama</p>
+                </div>
+            </div>
+            <div class="px-4 py-2 bg-white/10 backdrop-blur-md rounded-3xl text-xs font-medium flex items-center gap-2">
+                <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                LIVE
+            </div>
+        </header>
+
+        <div id="scene" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 relative z-10"></div>
+
+        <!-- Event log -->
+        <div class="mt-auto pt-6">
+            <div id="log" class="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-4 text-xs max-h-40 overflow-auto font-mono space-y-1"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://pznhqablycnhyepwymks.supabase.co';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6bmhxYWJseWNuaHllcHd5bWtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNjE4ODUsImV4cCI6MjA5NDYzNzg4NX0.C4s0xJiJfGLn-pz2ltgyrwNohUwq85-Jd-6vitsVDFo';
+
+        let homes = [];
+        let lastTimestamp = new Date().toISOString();
+
+        async function api(path, query = '') {
+            const url = `${SUPABASE_URL}/rest/v1/${path}${query ? '?' + query : ''}`;
+            const res = await fetch(url, {
+                headers: {
+                    apikey: ANON_KEY,
+                    Authorization: `Bearer ${ANON_KEY}`
+                }
+            });
+            return res.json();
+        }
+
+        function createHomeCard(home) {
+            const skin = home.character_skin || '#f5d0b5';
+            const hair = home.character_hair || '#3d2b1f';
+            const shirt = home.character_shirt || '#3b82f6';
+            return `
+            <div id="home-${home.family_id}" class="group bg-[#1c1838] border border-yellow-400/20 hover:border-yellow-400/40 rounded-3xl overflow-hidden transition-all">
+                <div class="h-2 bg-gradient-to-r from-yellow-300 to-amber-300"></div>
+                <div class="p-6">
+                    <!-- Character -->
+                    <div class="flex justify-center mb-4">
+                        <div class="relative">
+                            <!-- Head -->
+                            <div style="background-color: ${skin}" class="w-20 h-20 rounded-2xl shadow-inner flex items-center justify-center text-5xl relative">
+                                <!-- Hair -->
+                                <div style="background-color: ${hair}" class="absolute -top-3 left-1/2 -translate-x-1/2 w-20 h-12 rounded-t-3xl"></div>
+                                👀
+                            </div>
+                            <!-- Body -->
+                            <div style="background-color: ${shirt}" class="w-16 h-20 mx-auto -mt-2 rounded-b-3xl shadow-md"></div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-amber-300 text-sm font-medium">🏠 ${home.display_name}</div>
+                        <div class="text-[10px] text-white/50">Plot ${home.plot_position || '?'}</div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        async function loadHomes() {
+            homes = await api('nightyard_homes', 'select=*&order=plot_position.asc');
+            const container = document.getElementById('scene');
+            container.innerHTML = homes.map(h => createHomeCard(h)).join('');
+        }
+
+        function addLog(text) {
+            const logEl = document.getElementById('log');
+            const div = document.createElement('div');
+            div.className = 'text-emerald-300';
+            div.textContent = `${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} ${text}`;
+            logEl.prepend(div);
+            if (logEl.children.length > 8) logEl.removeChild(logEl.lastChild);
+        }
+
+        async function pollEvents() {
+            try {
+                const events = await api('sale_events', 'select=*,created_at&order=created_at.desc&limit=8');
+                for (let event of events.reverse()) {  // oldest first for order
+                    if (new Date(event.created_at) > new Date(lastTimestamp)) {
+                        lastTimestamp = event.created_at;
+                        if (event.event_type === 'item_sold') {
+                            // Lookup item creator
+                            const items = await api('nightyard_items', `id=eq.${event.item_id}&select=created_by`);
+                            if (items && items.length > 0) {
+                                const seller = homes.find(h => h.user_id === items[0].created_by);
+                                if (seller) {
+                                    triggerCelebration(seller.family_id);
+                                    addLog(`🎉 ${seller.display_name} sold an item!`);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+
+        function triggerCelebration(familyId) {
+            const card = document.getElementById(`home-${familyId}`);
+            if (card) {
+                card.classList.add('celebrating', 'border-emerald-400', 'shadow-2xl', 'shadow-emerald-400/30');
+                // Simple particle burst simulation
+                setTimeout(() => card.classList.remove('celebrating', 'border-emerald-400', 'shadow-2xl', 'shadow-emerald-400/30'), 2500);
+            }
+        }
+
+        // Create background stars
+        function createStars() {
+            const starsContainer = document.getElementById('stars');
+            for (let i = 0; i < 80; i++) {
+                const star = document.createElement('div');
+                star.className = 'absolute w-1 h-1 bg-white rounded-full animate-pulse';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 60 + '%';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                starsContainer.appendChild(star);
+            }
+        }
+
+        async function start() {
+            createStars();
+            await loadHomes();
+            setInterval(pollEvents, 4000);
+            pollEvents(); // initial
+            addLog('🌍 Nightyard diorama online');
+            console.log('%cNightyard ready for your direction – Leo', 'color:#facc15; font-weight:600');
+        }
+
+        window.onload = start;
+    </script>
+</body>
+</html>
